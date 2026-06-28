@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EndoSeg — Browser-Native Ultrasound Segmentation</title>
+  <meta name="description" content="Client-side ovarian-lesion ultrasound segmentation. Your scan never leaves your device." />
+  <link rel="stylesheet" href="style.css" />
+  <!-- ONNX Runtime Web (WebGPU + WASM). Pin a version for reproducibility. -->
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>EndoSeg</h1>
+    <p class="tagline">Fine-tuned in the cloud. Inferred privately in your browser.</p>
+  </header>
+
+  <div class="privacy-banner" role="note">
+    🔒 Your image never leaves this device. Inference runs entirely in your browser.
+  </div>
+
+  <main class="layout">
+    <section class="controls">
+      <h2>1. Choose an image</h2>
+      <input type="file" id="fileInput" accept="image/*" />
+      <p class="hint">…or pick a sample (you won't have your own scans):</p>
+      <div id="gallery" class="gallery"><!-- sample thumbnails injected by app.js --></div>
+
+      <h2>2. Run segmentation</h2>
+      <button id="runBtn" disabled>Segment (local)</button>
+      <button id="cloudBtn" class="secondary" disabled>Compare to cloud</button>
+
+      <h2>Display</h2>
+      <label>Mask opacity
+        <input type="range" id="opacity" min="0" max="100" value="50" />
+      </label>
+
+      <div class="status">
+        <div>Backend: <span id="backend">—</span></div>
+        <div>Latency: <span id="latency">—</span></div>
+        <div>Dice (vs cloud): <span id="delta">—</span></div>
+      </div>
+
+      <p class="disclaimer">Research/education only. Not a medical device; no diagnostic use.</p>
+    </section>
+
+    <section class="canvas-wrap">
+      <canvas id="view" width="256" height="256"></canvas>
+      <p class="legend"><span class="swatch lesion"></span> ovarian lesion</p>
+    </section>
+  </main>
+
+  <footer>
+    <a href="https://github.com/your-org/endoseg" target="_blank" rel="noopener">Repo</a> ·
+    Dataset: MMOTU (cite + verify license) ·
+    <span>#NebiusServerlessChallenge</span>
+  </footer>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>

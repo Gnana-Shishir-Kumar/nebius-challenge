@@ -1,0 +1,36 @@
+# Nebius Serverless Job N2 — U-Net fine-tuning (GPU).
+# Illustrative schema; adjust keys to the live Nebius Jobs spec before running.
+apiVersion: serverless.nebius.ai/v1
+kind: Job
+metadata:
+  name: endoseg-finetune
+  labels:
+    project: endoseg
+    stage: finetune
+spec:
+  image: cr.nebius.cloud/endoseg/finetune:latest   # built from jobs/finetune/Dockerfile
+  resources:
+    cpu: 8
+    memoryGiB: 32
+    gpu: 1
+    gpuType: nvidia-l40s   # pick from available Nebius GPU SKUs
+  command: ["python", "jobs/finetune/train_unet.py"]
+  args:
+    - "--data-dir=/data/processed"
+    - "--out-dir=/checkpoints"
+    - "--epochs=50"
+    - "--batch-size=16"
+    - "--lr=0.001"
+  env:
+    - name: PYTHONUNBUFFERED
+      value: "1"
+  mounts:
+    - name: processed-data
+      objectStorageBucket: endoseg-data
+      mountPath: /data/processed
+      readOnly: true
+    - name: checkpoints
+      objectStorageBucket: endoseg-checkpoints
+      mountPath: /checkpoints
+  restartPolicy: Never
+  timeoutSeconds: 21600

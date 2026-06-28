@@ -1,0 +1,36 @@
+# ---- Data & models (never commit raw/private data or large weights) ----
+data/raw/
+data/processed/
+checkpoints/
+*.pt
+*.pth
+*.onnx
+browser/models/
+browser/samples/
+
+# ---- Secrets ----
+.env
+*.key
+*token*
+secrets/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+
+# ---- Node / web (if added later) ----
+node_modules/
+dist/
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

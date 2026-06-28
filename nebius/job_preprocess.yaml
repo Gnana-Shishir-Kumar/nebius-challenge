@@ -1,0 +1,34 @@
+# Nebius Serverless Job N1 — MMOTU preprocessing / ETL (CPU).
+# Illustrative schema; adjust keys to the live Nebius Jobs spec before running.
+apiVersion: serverless.nebius.ai/v1
+kind: Job
+metadata:
+  name: endoseg-preprocess
+  labels:
+    project: endoseg
+    stage: preprocess
+spec:
+  image: cr.nebius.cloud/endoseg/preprocess:latest   # built from jobs/preprocess/Dockerfile
+  resources:
+    cpu: 4
+    memoryGiB: 8
+    gpu: 0
+  command: ["python", "preprocess.py"]
+  args:
+    - "--raw-dir=/data/raw/mmotu"
+    - "--out-dir=/data/processed"
+    - "--img-size=256"
+    - "--clahe"
+  env:
+    - name: PYTHONUNBUFFERED
+      value: "1"
+  mounts:
+    - name: raw-data
+      objectStorageBucket: endoseg-data
+      mountPath: /data/raw
+      readOnly: true
+    - name: processed-data
+      objectStorageBucket: endoseg-data
+      mountPath: /data/processed
+  restartPolicy: Never
+  timeoutSeconds: 3600

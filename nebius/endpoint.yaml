@@ -1,0 +1,36 @@
+# Nebius Serverless Endpoint N4 — hosted full-precision inference (HTTP).
+# Illustrative schema; adjust keys to the live Nebius Endpoint spec before running.
+apiVersion: serverless.nebius.ai/v1
+kind: Endpoint
+metadata:
+  name: endoseg-endpoint
+  labels:
+    project: endoseg
+    stage: serve
+spec:
+  image: cr.nebius.cloud/endoseg/endpoint:latest   # built from endpoint/Dockerfile
+  resources:
+    cpu: 4
+    memoryGiB: 16
+    gpu: 1
+    gpuType: nvidia-l40s
+  port: 8000
+  healthCheck:
+    path: /health
+    initialDelaySeconds: 20
+  autoscaling:
+    minReplicas: 0       # scale to zero between requests (serverless cost control)
+    maxReplicas: 2
+  env:
+    - name: MODEL_PATH
+      value: /models/unet.onnx
+    - name: IMG_SIZE
+      value: "256"
+  mounts:
+    - name: models
+      objectStorageBucket: endoseg-checkpoints
+      mountPath: /models
+      readOnly: true
+  # The endpoint is reached only via the token-hiding proxy (proxy/proxy.py).
+  auth:
+    type: bearer
