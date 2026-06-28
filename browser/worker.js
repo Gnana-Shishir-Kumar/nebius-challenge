@@ -1,51 +1,56 @@
-// EndoSeg inference Web Worker.
-// Loads the quantized ONNX model and runs inference off the UI thread.
-// Tries WebGPU first, falls back to WASM (PRD B4). ORT is loaded via importScripts
-// because module workers don't always resolve the CDN UMD bundle cleanly.
+// EndoSeg inference Web Worker — ONNX Runtime Web (WebGPU → WASM fallback).
 
-importScripts("https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js");
+importScripts("https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js");
 
 let session = null;
-let backend = "wasm";
 
-async function init(modelUrl) {
-  // Prefer WebGPU; gracefully degrade to WASM.
-  const tryOrder = ["webgpu", "wasm"];
-  for (const ep of tryOrder) {
+async function loadModel(modelUrl) {
+  const providers = ["webgpu", "wasm"];
+
+  for (const ep of providers) {
     try {
-      session = await ort.InferenceSession.create(modelUrl, { executionProviders: [ep] });
-      backend = ep;
-      break;
+      session = await ort.InferenceSession.create(modelUrl, {
+        executionProviders: [ep],
+      });
+      postMessage({ type: "modelLoaded", backend: ep });
+      return;
     } catch (err) {
-      console.warn(`provider ${ep} failed:`, err);
+      console.warn(`execution provider ${ep} failed:`, err);
     }
   }
-  if (!session) throw new Error("could not create ONNX session on any backend");
-  postMessage({ type: "ready", backend });
+
+  throw new Error("could not create ONNX session on WebGPU or WASM");
 }
 
-async function infer(input, size) {
-  const start = performance.now();
-  const tensor = new ort.Tensor("float32", input, [1, 3, size, size]);
-  const output = await session.run({ input: tensor });
-  const logits = output[Object.keys(output)[0]].data; // Float32Array, size*size
-
-  // sigmoid -> threshold 0.5 -> uint8 mask
-  const mask = new Uint8Array(size * size);
-  for (let i = 0; i < mask.length; i++) {
-    const p = 1 / (1 + Math.exp(-logits[i]));
-    mask[i] = p > 0.5 ? 1 : 0;
+async function infer(imageData, width, height) {
+  if (!session) {
+    throw new Error("model not loaded");
   }
+
+  const start = performance.now();
+  const tensor = new ort.Tensor("float32", imageData, [1, 1, height, width]);
+  const output = await session.run({ input: tensor });
+  const logits = output[Object.keys(output)[0]].data;
+
+  const maskData = new Float32Array(logits.length);
+  for (let i = 0; i < logits.length; i++) {
+    maskData[i] = 1 / (1 + Math.exp(-logits[i]));
+  }
+
   const latencyMs = performance.now() - start;
-  postMessage({ type: "result", mask, latencyMs }, [mask.buffer]);
+  postMessage({ type: "result", maskData, latencyMs }, [maskData.buffer]);
 }
 
 onmessage = async (e) => {
   const msg = e.data;
+
   try {
-    if (msg.type === "init") await init(msg.modelUrl);
-    else if (msg.type === "infer") await infer(msg.input, msg.size);
+    if (msg.type === "loadModel") {
+      await loadModel(msg.modelUrl);
+    } else if (msg.type === "infer") {
+      await infer(msg.imageData, msg.width, msg.height);
+    }
   } catch (err) {
-    postMessage({ type: "error", message: String(err) });
+    postMessage({ type: "error", message: String(err?.message || err) });
   }
 };
