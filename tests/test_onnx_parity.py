@@ -30,7 +30,7 @@ def exported_onnx(tmp_path_factory) -> tuple[torch.nn.Module, Path]:
     """Build a fresh model and export it to a temp ONNX file."""
     model = build_model(num_classes=1).eval()
     out_path = tmp_path_factory.mktemp("onnx") / "unet.onnx"
-    dummy = torch.randn(1, 3, IMG_SIZE, IMG_SIZE)
+    dummy = torch.randn(1, 1, IMG_SIZE, IMG_SIZE)
     torch.onnx.export(
         model,
         dummy,
@@ -46,7 +46,7 @@ def exported_onnx(tmp_path_factory) -> tuple[torch.nn.Module, Path]:
 
 def test_onnx_matches_pytorch(exported_onnx):
     model, onnx_path = exported_onnx
-    x = torch.randn(1, 3, IMG_SIZE, IMG_SIZE)
+    x = torch.randn(1, 1, IMG_SIZE, IMG_SIZE)
     with torch.no_grad():
         torch_out = model(x).numpy()
 
@@ -61,5 +61,5 @@ def test_onnx_matches_pytorch(exported_onnx):
 def test_output_shape(exported_onnx):
     _, onnx_path = exported_onnx
     sess = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
-    out = sess.run(None, {"input": np.zeros((1, 3, IMG_SIZE, IMG_SIZE), dtype=np.float32)})[0]
+    out = sess.run(None, {"input": np.zeros((1, 1, IMG_SIZE, IMG_SIZE), dtype=np.float32)})[0]
     assert out.shape == (1, 1, IMG_SIZE, IMG_SIZE)

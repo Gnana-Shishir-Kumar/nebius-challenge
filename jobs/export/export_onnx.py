@@ -40,7 +40,7 @@ def load_model(checkpoint: str) -> torch.nn.Module:
 
 
 def export_fp32(model: torch.nn.Module, path: Path, img_size: int) -> None:
-    dummy = torch.randn(1, 3, img_size, img_size)
+    dummy = torch.randn(1, 1, img_size, img_size)  # grayscale ultrasound
     torch.onnx.export(
         model,
         dummy,
@@ -77,7 +77,7 @@ def quantize(src: Path, dst: Path, mode: str) -> Path:
 def parity_check(model: torch.nn.Module, onnx_path: Path, img_size: int, atol: float) -> None:
     import onnxruntime as ort
 
-    x = torch.randn(1, 3, img_size, img_size)
+    x = torch.randn(1, 1, img_size, img_size)
     with torch.no_grad():
         torch_out = model(x).numpy()
     sess = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
