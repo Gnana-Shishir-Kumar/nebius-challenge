@@ -134,6 +134,23 @@ def build_model(
     )
 
 
+class UNet2D(UNet):
+    """UNet with browser-oriented factory and size utilities.
+
+    All existing ``UNet`` kwargs work; this class just adds two helpers that
+    the public API and the verification script expect.
+    """
+
+    @classmethod
+    def for_browser(cls) -> "UNet2D":
+        """Browser-optimised default: 1-ch grayscale in, binary mask out, base=16."""
+        return cls(in_channels=1, num_classes=1, base_channels=16)
+
+    def model_size_mb(self) -> float:
+        """Parameter footprint in MB (float32 — before quantization)."""
+        return sum(p.numel() for p in self.parameters()) * 4 / (1024 ** 2)
+
+
 if __name__ == "__main__":
     model = build_model()
     dummy = torch.randn(1, 1, 256, 256)

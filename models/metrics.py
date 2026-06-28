@@ -47,6 +47,22 @@ def iou_score(
     return iou.mean()
 
 
+@torch.no_grad()
+def confusion_matrix_binary(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    threshold: float = 0.5,
+) -> dict[str, torch.Tensor]:
+    """TP / FP / FN / TN pixel counts summed over the whole batch."""
+    preds = (torch.sigmoid(logits) > threshold).float().view(-1)
+    targets = targets.float().view(-1)
+    tp = (preds * targets).sum()
+    fp = (preds * (1.0 - targets)).sum()
+    fn = ((1.0 - preds) * targets).sum()
+    tn = ((1.0 - preds) * (1.0 - targets)).sum()
+    return {"tp": tp, "fp": fp, "fn": fn, "tn": tn}
+
+
 class MetricTracker:
     """Accumulates batch metrics into running averages for an epoch."""
 
