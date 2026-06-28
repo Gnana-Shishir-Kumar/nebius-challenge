@@ -3,59 +3,180 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>EndoSeg — Browser-Native Ultrasound Segmentation</title>
-  <meta name="description" content="Client-side ovarian-lesion ultrasound segmentation. Your scan never leaves your device." />
+  <title>EndoSeg</title>
   <link rel="stylesheet" href="style.css" />
-  <!-- ONNX Runtime Web (WebGPU + WASM). Pin a version for reproducibility. -->
-  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js"></script>
 </head>
 <body>
-  <header class="topbar">
-    <h1>EndoSeg</h1>
-    <p class="tagline">Fine-tuned in the cloud. Inferred privately in your browser.</p>
-  </header>
-
-  <div class="privacy-banner" role="note">
-    🔒 Your image never leaves this device. Inference runs entirely in your browser.
+  <div id="privacy-banner" class="privacy-banner" role="note">
+    <p class="privacy-banner__text">
+      Your image never leaves this device — all inference runs locally in your browser.
+    </p>
+    <button
+      id="privacy-dismiss"
+      class="privacy-banner__dismiss"
+      type="button"
+      aria-label="Dismiss privacy notice"
+    >&times;</button>
   </div>
 
-  <main class="layout">
-    <section class="controls">
-      <h2>1. Choose an image</h2>
-      <input type="file" id="fileInput" accept="image/*" />
-      <p class="hint">…or pick a sample (you won't have your own scans):</p>
-      <div id="gallery" class="gallery"><!-- sample thumbnails injected by app.js --></div>
+  <header class="header">
+    <h1 class="header__logo">EndoSeg</h1>
+    <p class="header__tagline">Fine-tuned in the cloud. Inferred privately in your browser.</p>
+  </header>
 
-      <h2>2. Run segmentation</h2>
-      <button id="runBtn" disabled>Segment (local)</button>
-      <button id="cloudBtn" class="secondary" disabled>Compare to cloud</button>
-
-      <h2>Display</h2>
-      <label>Mask opacity
-        <input type="range" id="opacity" min="0" max="100" value="50" />
-      </label>
-
-      <div class="status">
-        <div>Backend: <span id="backend">—</span></div>
-        <div>Latency: <span id="latency">—</span></div>
-        <div>Dice (vs cloud): <span id="delta">—</span></div>
+  <main class="main-grid">
+    <section class="panel panel--upload" aria-label="Upload">
+      <div
+        id="drop-zone"
+        class="drop-zone"
+        tabindex="0"
+        role="button"
+        aria-label="Drop an ultrasound image or click to browse"
+      >
+        <svg class="drop-zone__icon" viewBox="0 0 48 48" width="48" height="48" aria-hidden="true">
+          <path
+            d="M24 8v20M14 18l10-10 10 10M10 32v4a4 4 0 004 4h20a4 4 0 004-4v-4"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+        <p class="drop-zone__text">Drop an ultrasound image or click to browse</p>
       </div>
+      <input
+        id="file-input"
+        class="file-input"
+        type="file"
+        accept="image/*"
+        hidden
+      />
 
-      <p class="disclaimer">Research/education only. Not a medical device; no diagnostic use.</p>
+      <div class="sample-gallery" aria-label="Sample images">
+        <article class="sample-card">
+          <img
+            class="sample-card__thumb"
+            src="samples/sample1.png"
+            alt="Sample 1 ultrasound"
+            width="120"
+            height="90"
+          />
+          <span class="sample-card__label">Sample 1</span>
+          <button
+            class="btn btn--secondary sample-card__try"
+            type="button"
+            data-sample="1"
+            data-sample-src="samples/sample1.png"
+          >
+            Try this
+          </button>
+        </article>
+        <article class="sample-card">
+          <img
+            class="sample-card__thumb"
+            src="samples/sample2.png"
+            alt="Sample 2 ultrasound"
+            width="120"
+            height="90"
+          />
+          <span class="sample-card__label">Sample 2</span>
+          <button
+            class="btn btn--secondary sample-card__try"
+            type="button"
+            data-sample="2"
+            data-sample-src="samples/sample2.png"
+          >
+            Try this
+          </button>
+        </article>
+        <article class="sample-card">
+          <img
+            class="sample-card__thumb"
+            src="samples/sample3.png"
+            alt="Sample 3 ultrasound"
+            width="120"
+            height="90"
+          />
+          <span class="sample-card__label">Sample 3</span>
+          <button
+            class="btn btn--secondary sample-card__try"
+            type="button"
+            data-sample="3"
+            data-sample-src="samples/sample3.png"
+          >
+            Try this
+          </button>
+        </article>
+      </div>
     </section>
 
-    <section class="canvas-wrap">
-      <canvas id="view" width="256" height="256"></canvas>
-      <p class="legend"><span class="swatch lesion"></span> ovarian lesion</p>
+    <section class="panel panel--results" aria-label="Results">
+      <div class="canvas-wrap">
+        <canvas id="output-canvas" width="512" height="512" aria-label="Segmentation output"></canvas>
+      </div>
+
+      <div id="confidence-readout" class="heatmap-info" hidden aria-live="polite">
+        <p>Mean confidence in lesion region: <span id="conf-mean">—</span></p>
+        <p>Max probability: <span id="conf-max">—</span></p>
+        <p>Lesion area: <span id="conf-area">—</span></p>
+      </div>
+
+      <div class="controls">
+        <label class="slider-label" for="opacity-slider">
+          Mask opacity
+          <span id="opacity-value" class="slider-label__value">70%</span>
+        </label>
+        <input
+          id="opacity-slider"
+          class="range-slider"
+          type="range"
+          min="0"
+          max="100"
+          value="70"
+        />
+
+        <label class="slider-label" for="threshold-slider">
+          Detection threshold
+          <span id="threshold-value" class="slider-label__value">0.50</span>
+        </label>
+        <input
+          id="threshold-slider"
+          class="range-slider"
+          type="range"
+          min="0.1"
+          max="0.9"
+          step="0.05"
+          value="0.5"
+        />
+
+        <label class="checkbox-label">
+          <input id="heatmap-toggle" type="checkbox" />
+          Show probability heatmap (instead of binary mask)
+        </label>
+
+        <button id="segment-btn" class="btn btn--primary" type="button" disabled>
+          Segment
+        </button>
+
+        <p id="status-bar" class="status-bar" data-status="ready">Ready</p>
+
+        <p class="inference-info">
+          Backend: <span id="backend-info">—</span>
+          &nbsp;&nbsp;Latency: <span id="latency-info">—</span>
+        </p>
+
+        <button id="compare-cloud-btn" class="btn btn--secondary" type="button" disabled>
+          Compare to cloud
+        </button>
+      </div>
     </section>
   </main>
 
-  <footer>
-    <a href="https://github.com/your-org/endoseg" target="_blank" rel="noopener">Repo</a> ·
-    Dataset: MMOTU (cite + verify license) ·
-    <span>#NebiusServerlessChallenge</span>
+  <footer class="footer">
+    Research only — not a medical device
   </footer>
 
-  <script src="app.js" type="module"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
