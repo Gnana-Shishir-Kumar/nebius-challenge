@@ -1,34 +1,28 @@
-# Nebius Serverless Job N1 — MMOTU preprocessing / ETL (CPU).
-# Illustrative schema; adjust keys to the live Nebius Jobs spec before running.
-apiVersion: serverless.nebius.ai/v1
-kind: Job
-metadata:
-  name: endoseg-preprocess
-  labels:
-    project: endoseg
-    stage: preprocess
-spec:
-  image: cr.nebius.cloud/endoseg/preprocess:latest   # built from jobs/preprocess/Dockerfile
-  resources:
-    cpu: 4
-    memoryGiB: 8
-    gpu: 0
-  command: ["python", "preprocess.py"]
-  args:
-    - "--raw-dir=/data/raw/mmotu"
-    - "--out-dir=/data/processed"
-    - "--img-size=256"
-    - "--clahe"
-  env:
-    - name: PYTHONUNBUFFERED
-      value: "1"
-  mounts:
-    - name: raw-data
-      objectStorageBucket: endoseg-data
-      mountPath: /data/raw
-      readOnly: true
-    - name: processed-data
-      objectStorageBucket: endoseg-data
-      mountPath: /data/processed
-  restartPolicy: Never
-  timeoutSeconds: 3600
+# Nebius Serverless Job N1 — MMOTU preprocessing / ETL (CPU only)
+name: endoseg-preprocess
+container_image: cr.nebius.cloud/TODO_PROJECT_ID/endoseg-preprocess:latest  # TODO: set project ID and push image
+
+command:
+  - python
+  - preprocess.py
+  - --raw-dir=/data/raw/mmotu
+  - --out-dir=/output/processed
+  - --img-size=256
+  - --clahe
+
+resources:
+  gpu_count: 0
+  memory_gb: 16
+
+environment:
+  DATA_DIR: /data
+  OUT_DIR: /output
+  PYTHONUNBUFFERED: "1"
+
+object_storage_mounts:
+  - bucket: TODO_endoseg-data          # TODO: set bucket name
+    mount_path: /data
+    read_only: true
+  - bucket: TODO_endoseg-processed     # TODO: set bucket name
+    mount_path: /output
+    read_only: false

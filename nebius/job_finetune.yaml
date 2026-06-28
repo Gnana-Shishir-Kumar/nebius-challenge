@@ -1,36 +1,29 @@
-# Nebius Serverless Job N2 — U-Net fine-tuning (GPU).
-# Illustrative schema; adjust keys to the live Nebius Jobs spec before running.
-apiVersion: serverless.nebius.ai/v1
-kind: Job
-metadata:
-  name: endoseg-finetune
-  labels:
-    project: endoseg
-    stage: finetune
-spec:
-  image: cr.nebius.cloud/endoseg/finetune:latest   # built from jobs/finetune/Dockerfile
-  resources:
-    cpu: 8
-    memoryGiB: 32
-    gpu: 1
-    gpuType: nvidia-l40s   # pick from available Nebius GPU SKUs
-  command: ["python", "jobs/finetune/train_unet.py"]
-  args:
-    - "--data-dir=/data/processed"
-    - "--out-dir=/checkpoints"
-    - "--epochs=50"
-    - "--batch-size=16"
-    - "--lr=0.001"
-  env:
-    - name: PYTHONUNBUFFERED
-      value: "1"
-  mounts:
-    - name: processed-data
-      objectStorageBucket: endoseg-data
-      mountPath: /data/processed
-      readOnly: true
-    - name: checkpoints
-      objectStorageBucket: endoseg-checkpoints
-      mountPath: /checkpoints
-  restartPolicy: Never
-  timeoutSeconds: 21600
+# Nebius Serverless Job N2 — U-Net fine-tuning (GPU)
+name: endoseg-finetune
+container_image: cr.nebius.cloud/TODO_PROJECT_ID/endoseg-finetune:latest  # TODO: set project ID and push image
+
+command:
+  - python
+  - train_unet.py
+  - --data-dir=/data/processed
+  - --out-dir=/output/checkpoints
+  - --epochs=50
+  - --batch-size=16
+  - --lr=1e-3
+
+resources:
+  gpu_count: 1          # nvidia-l40s or equivalent; set GPU type in Nebius console
+  memory_gb: 32
+
+environment:
+  DATA_DIR: /data
+  OUT_DIR: /output
+  PYTHONUNBUFFERED: "1"
+
+object_storage_mounts:
+  - bucket: TODO_endoseg-processed     # TODO: set bucket name (preprocessed data, read-only)
+    mount_path: /data
+    read_only: true
+  - bucket: TODO_endoseg-checkpoints   # TODO: set bucket name (checkpoint output)
+    mount_path: /output
+    read_only: false

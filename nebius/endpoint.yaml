@@ -1,36 +1,31 @@
-# Nebius Serverless Endpoint N4 — hosted full-precision inference (HTTP).
-# Illustrative schema; adjust keys to the live Nebius Endpoint spec before running.
-apiVersion: serverless.nebius.ai/v1
-kind: Endpoint
-metadata:
-  name: endoseg-endpoint
-  labels:
-    project: endoseg
-    stage: serve
-spec:
-  image: cr.nebius.cloud/endoseg/endpoint:latest   # built from endpoint/Dockerfile
-  resources:
-    cpu: 4
-    memoryGiB: 16
-    gpu: 1
-    gpuType: nvidia-l40s
-  port: 8000
-  healthCheck:
-    path: /health
-    initialDelaySeconds: 20
-  autoscaling:
-    minReplicas: 0       # scale to zero between requests (serverless cost control)
-    maxReplicas: 2
-  env:
-    - name: MODEL_PATH
-      value: /models/unet.onnx
-    - name: IMG_SIZE
-      value: "256"
-  mounts:
-    - name: models
-      objectStorageBucket: endoseg-checkpoints
-      mountPath: /models
-      readOnly: true
-  # The endpoint is reached only via the token-hiding proxy (proxy/proxy.py).
-  auth:
-    type: bearer
+# Nebius Serverless Endpoint N4 — hosted inference (HTTP JSON)
+name: endoseg-endpoint
+container_image: cr.nebius.cloud/TODO_PROJECT_ID/endoseg-endpoint:latest  # TODO: set project ID and push image
+
+command:
+  - uvicorn
+  - serve:app
+  - --host=0.0.0.0
+  - --port=8000
+
+resources:
+  gpu_count: 1          # nvidia-l40s for production; set 0 for CPU-only testing
+  memory_gb: 16
+
+environment:
+  DATA_DIR: /data
+  OUT_DIR: /output
+  MODEL_PATH: /data/unet.onnx
+  IMG_SIZE: "256"
+  MODEL_VERSION: unet-v1
+  PORT: "8000"
+
+object_storage_mounts:
+  - bucket: TODO_endoseg-models        # TODO: set bucket name (ONNX model, read-only)
+    mount_path: /data
+    read_only: true
+
+# Endpoint-specific settings (set in Nebius console or via CLI)
+# health_check_path: /health
+# autoscaling: min_replicas=0, max_replicas=2  (scale-to-zero for cost control)
+# auth: bearer token required — expose only via proxy/proxy.py
