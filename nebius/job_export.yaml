@@ -1,0 +1,37 @@
+# Nebius Job N3: Eval + ONNX Export
+# Adjust resource specs and bucket names to match your live Nebius project.
+
+name: endoseg-export
+description: "Evaluate trained U-Net and export to ONNX (fp32 + int8 quantized)"
+
+resources:
+  cpu: 4
+  memory_gb: 16
+  gpu: 0  # CPU-only; quantization does not need GPU
+
+docker_image: # TODO: registry/endoseg-export:latest
+
+command:
+  - python
+  - export_onnx.py
+  - --checkpoint
+  - /mnt/checkpoints/unet_best.pth
+  - --output-dir
+  - /mnt/models
+  - --img-size
+  - "256"
+
+environment:
+  PYTHONUNBUFFERED: "1"
+
+mounts:
+  - name: checkpoints
+    bucket: endoseg-checkpoints   # TODO: set bucket name
+    mount_path: /mnt/checkpoints
+    read_only: true
+  - name: models
+    bucket: endoseg-models         # TODO: set bucket name
+    mount_path: /mnt/models
+    read_only: false
+
+timeout_seconds: 1800  # 30 min; export is fast
