@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="proxy-url" content="" />
   <title>EndoSeg</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -159,7 +160,16 @@
           Segment
         </button>
 
+        <div id="loading-bar-wrap" class="loading-bar-wrap" hidden>
+          <div id="loading-bar" class="loading-bar" style="width: 0%"></div>
+        </div>
+
         <p id="status-bar" class="status-bar" data-status="ready">Ready</p>
+
+        <div class="inference-meta">
+          <span id="backend-badge" class="backend-badge backend-badge--hidden" hidden>—</span>
+          <span id="cache-indicator" class="cache-indicator" hidden>⚡ Model cached</span>
+        </div>
 
         <p class="inference-info">
           Backend: <span id="backend-info">—</span>
@@ -169,6 +179,26 @@
         <button id="compare-cloud-btn" class="btn btn--secondary" type="button" disabled>
           Compare to cloud
         </button>
+      </div>
+
+      <div id="cloud-compare" class="cloud-compare" hidden>
+        <h3 class="cloud-compare__title">Cloud vs local comparison</h3>
+        <div class="cloud-compare__grid">
+          <div class="cloud-compare__panel">
+            <h4 class="cloud-compare__label">Local</h4>
+            <canvas id="local-compare-canvas" width="256" height="256" aria-label="Local mask"></canvas>
+            <p id="local-compare-latency" class="cloud-compare__latency">Local: —</p>
+          </div>
+          <div class="cloud-compare__panel">
+            <h4 class="cloud-compare__label">Cloud</h4>
+            <canvas id="cloud-canvas" width="256" height="256" aria-label="Cloud mask"></canvas>
+            <p id="cloud-compare-latency" class="cloud-compare__latency">Cloud: —</p>
+          </div>
+        </div>
+        <p class="agreement-score">
+          Agreement: <span id="agreement-pct">—</span>
+        </p>
+        <p id="dice-score" class="cloud-compare__dice">Dice vs cloud: —</p>
       </div>
     </section>
   </main>
