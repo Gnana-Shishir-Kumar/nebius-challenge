@@ -1,12 +1,4 @@
-"""Nebius Endpoint N4 — hosted full-precision segmentation inference (HTTP).
-
-Serves the heavier model (foundation-model fine-tune in the full build; the
-U-Net here as a working default) behind a small FastAPI app. The browser's
-"Compare to cloud" button hits this endpoint via the token-hiding proxy.
-
-POST /infer  multipart image file  -> PNG mask (base64) + latency + meta
-GET  /health                       -> liveness probe for the Endpoint
-"""
+"""Nebius Endpoint N4 — hosted segmentation inference over HTTP (JSON)."""
 
 from __future__ import annotations
 
@@ -14,27 +6,36 @@ import base64
 import io
 import os
 import time
-from pathlib import Path
 
 import numpy as np
-from fastapi import FastAPI, File, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException
 from PIL import Image
+from pydantic import BaseModel
 
 try:
     import onnxruntime as ort
-except ImportError:  # keeps the stub importable without ORT installed
+except ImportError:
     ort = None
 
+MODEL_PATH = os.getenv("MODEL_PATH", "/model/unet.onnx")
 IMG_SIZE = int(os.getenv("IMG_SIZE", "256"))
-MODEL_PATH = os.getenv("MODEL_PATH", "/models/unet.onnx")
+MODEL_VERSION = os.getenv("MODEL_VERSION", "unet-v1")
 
 app = FastAPI(title="EndoSeg Endpoint", version="0.1.0")
 _session: "ort.InferenceSession | None" = None
 
 
+class PredictRequest(BaseModel):
+    image_b64: str  # base64-encoded PNG or JPG
+
+
+class PredictResponse(BaseModel):
+    mask_b64: str       # base64-encoded PNG mask (256x256 uint8, values 0-255)
+    latency_ms: float
+    model_version: str
+
+
 def get_session() -> "ort.InferenceSession":
-    """Lazy-load the ONNX session so cold start is the only heavy hit."""
     global _session
     if _session is None:
         if ort is None:
@@ -45,56 +46,55 @@ def get_session() -> "ort.InferenceSession":
             else ["CPUExecutionProvider"]
         )
         _session = ort.InferenceSession(MODEL_PATH, providers=providers)
-        print(f"loaded model {MODEL_PATH} with providers {providers}")
     return _session
 
 
 def preprocess(image: Image.Image) -> np.ndarray:
-    """Match the training transform: resize -> RGB -> normalize [-1, 1] -> NCHW."""
-    image = image.convert("RGB").resize((IMG_SIZE, IMG_SIZE), Image.BILINEAR)
+    """Grayscale → resize 256×256 → normalize [0, 1] → NCHW float32."""
+    image = image.convert("L").resize((IMG_SIZE, IMG_SIZE), Image.BILINEAR)
     arr = np.asarray(image).astype(np.float32) / 255.0
-    arr = (arr - 0.5) / 0.5
-    arr = arr.transpose(2, 0, 1)[None, ...]
-    return arr.astype(np.float32)
+    return arr[None, None, ...]  # (1, 1, H, W)
 
 
 def postprocess(logits: np.ndarray) -> np.ndarray:
-    """Sigmoid -> threshold -> uint8 mask {0,255}."""
+    """Sigmoid → threshold 0.5 → uint8 mask {0, 255}."""
     probs = 1.0 / (1.0 + np.exp(-logits))
-    mask = (probs[0, 0] > 0.5).astype(np.uint8) * 255
-    return mask
+    return (probs[0, 0] > 0.5).astype(np.uint8) * 255
 
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "model": Path(MODEL_PATH).name}
+    return {"status": "ok", "model_loaded": _session is not None}
 
 
-@app.post("/infer")
-async def infer(file: UploadFile = File(...)) -> JSONResponse:
-    raw = await file.read()
-    image = Image.open(io.BytesIO(raw))
-    start = time.perf_counter()
+@app.post("/predict", response_model=PredictResponse)
+def predict(req: PredictRequest) -> PredictResponse:
+    try:
+        img_bytes = base64.b64decode(req.image_b64)
+        image = Image.open(io.BytesIO(img_bytes))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid image: {exc}")
+
+    t0 = time.perf_counter()
     inp = preprocess(image)
-    logits = get_session().run(None, {"input": inp})[0]
+    try:
+        logits = get_session().run(None, {"input": inp})[0]
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Inference error: {exc}")
     mask = postprocess(logits)
-    latency_ms = (time.perf_counter() - start) * 1000.0
+    latency_ms = (time.perf_counter() - t0) * 1000.0
 
     buf = io.BytesIO()
     Image.fromarray(mask).save(buf, format="PNG")
     mask_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
 
-    return JSONResponse(
-        {
-            "mask_png_base64": mask_b64,
-            "size": IMG_SIZE,
-            "latency_ms": round(latency_ms, 2),
-            "model": Path(MODEL_PATH).name,
-        }
+    return PredictResponse(
+        mask_b64=mask_b64,
+        latency_ms=round(latency_ms, 2),
+        model_version=MODEL_VERSION,
     )
 
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
