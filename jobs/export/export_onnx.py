@@ -1,90 +1,86 @@
-"""Nebius Job N3 — export the trained U-Net to ONNX (+ optional quantization).
-
-Loads a checkpoint, exports a clean ONNX graph at 256x256, optionally applies
-dynamic int8 / fp16 quantization, and runs a quick parity check between the
-PyTorch and ONNX Runtime outputs. The quantized .onnx is what the browser ships.
-"""
+"""Nebius Job N3 — export the trained U-Net to ONNX with optional fp16 and parity check."""
 
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
 import numpy as np
 import torch
 
-sys.path.append(str(Path(__file__).resolve().parents[2]))
-from models.unet import build_model  # noqa: E402
-
-OPSET = 17
+# Allow running from jobs/export/ directly during local dev
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from models import UNet2D  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="EndoSeg ONNX export job")
-    p.add_argument("--checkpoint", default=os.getenv("CHECKPOINT", "/checkpoints/unet_best.pt"))
-    p.add_argument("--out-dir", default=os.getenv("OUT_DIR", "/checkpoints"))
-    p.add_argument("--img-size", type=int, default=256)
-    p.add_argument("--quantize", choices=["none", "fp16", "int8"], default="int8")
-    p.add_argument("--atol", type=float, default=1e-3, help="parity tolerance")
+    p = argparse.ArgumentParser(description="Export EndoSeg U-Net to ONNX")
+    p.add_argument("--checkpoint", default="checkpoints/unet_best.pth",
+                   help="Path to .pth checkpoint file")
+    p.add_argument("--out-dir", default="browser/model",
+                   help="Directory to write unet.onnx into")
+    p.add_argument("--opset", type=int, default=17,
+                   help="ONNX opset version")
+    p.add_argument("--fp16", action="store_true",
+                   help="Convert exported model weights to fp16")
+    p.add_argument("--validate", action="store_true",
+                   help="Run parity check: assert PyTorch vs ONNX MAE < 0.01")
     return p.parse_args()
 
 
-def load_model(checkpoint: str) -> torch.nn.Module:
-    model = build_model(num_classes=1)
-    state = torch.load(checkpoint, map_location="cpu")
-    model.load_state_dict(state["model"] if "model" in state else state)
+def load_model(checkpoint: str) -> UNet2D:
+    path = Path(checkpoint)
+    if not path.exists():
+        sys.exit(f"Checkpoint not found: {path}")
+    model = UNet2D.for_browser()
+    state = torch.load(str(path), map_location="cpu")
+    weights = state.get("model", state)
+    model.load_state_dict(weights)
     model.eval()
+    print(f"Loaded checkpoint: {path}  ({model.model_size_mb():.1f} MB params)")
     return model
 
 
-def export_fp32(model: torch.nn.Module, path: Path, img_size: int) -> None:
-    dummy = torch.randn(1, 1, img_size, img_size)  # grayscale ultrasound
+def export_onnx(model: UNet2D, out_path: Path, opset: int) -> None:
+    dummy = torch.zeros(1, 1, 256, 256)
     torch.onnx.export(
         model,
         dummy,
-        str(path),
+        str(out_path),
         input_names=["input"],
-        output_names=["logits"],
-        opset_version=OPSET,
-        dynamic_axes={"input": {0: "batch"}, "logits": {0: "batch"}},
+        output_names=["output"],
+        opset_version=opset,
+        dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}},
         do_constant_folding=True,
+        dynamo=False,  # force legacy exporter; new dynamo path is not ONNX Runtime Web compatible
     )
-    print(f"exported fp32 ONNX -> {path}")
+    print(f"Exported fp32 ONNX  -> {out_path}  ({out_path.stat().st_size / 1e6:.2f} MB)")
 
 
-def quantize(src: Path, dst: Path, mode: str) -> Path:
-    if mode == "none":
-        return src
-    if mode == "int8":
-        from onnxruntime.quantization import quantize_dynamic, QuantType
+def convert_fp16(onnx_path: Path) -> None:
+    import onnx
+    from onnxconverter_common import float16
 
-        quantize_dynamic(str(src), str(dst), weight_type=QuantType.QInt8)
-        print(f"int8 dynamic quantized -> {dst}")
-        return dst
-    if mode == "fp16":
-        import onnx
-        from onnxconverter_common import float16
-
-        model_fp16 = float16.convert_float_to_float16(onnx.load(str(src)))
-        onnx.save(model_fp16, str(dst))
-        print(f"fp16 converted -> {dst}")
-        return dst
-    raise ValueError(mode)
+    model = onnx.load(str(onnx_path))
+    model_fp16 = float16.convert_float_to_float16(model, keep_io_types=True)
+    onnx.save(model_fp16, str(onnx_path))
+    print(f"Converted to fp16   -> {onnx_path}  ({onnx_path.stat().st_size / 1e6:.2f} MB)")
 
 
-def parity_check(model: torch.nn.Module, onnx_path: Path, img_size: int, atol: float) -> None:
+def validate(model: UNet2D, onnx_path: Path) -> None:
     import onnxruntime as ort
 
-    x = torch.randn(1, 1, img_size, img_size)
+    x = torch.randn(1, 1, 256, 256)
     with torch.no_grad():
-        torch_out = model(x).numpy()
+        pt_out = model(x).numpy()
+
     sess = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
-    onnx_out = sess.run(None, {"input": x.numpy()})[0]
-    max_diff = float(np.abs(torch_out - onnx_out).max())
-    status = "PASS" if max_diff <= atol else "WARN"
-    print(f"parity [{status}] max abs diff = {max_diff:.6f} (atol={atol})")
+    ort_out = sess.run(None, {"input": x.numpy()})[0]
+
+    mae = float(np.abs(pt_out - ort_out).mean())
+    assert mae < 0.01, f"Parity check FAILED: MAE={mae:.6f} >= 0.01"
+    print(f"Parity check passed: MAE={mae:.6f}")
 
 
 def main() -> None:
@@ -93,15 +89,17 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     model = load_model(args.checkpoint)
-    fp32_path = out_dir / "unet.onnx"
-    export_fp32(model, fp32_path, args.img_size)
 
-    quant_path = out_dir / f"unet_{args.quantize}.onnx"
-    final_path = quantize(fp32_path, quant_path, args.quantize)
+    onnx_path = out_dir / "unet.onnx"
+    export_onnx(model, onnx_path, args.opset)
 
-    # Parity is checked against the fp32 export (quantized differs by design).
-    parity_check(model, fp32_path, args.img_size, args.atol)
-    print(f"browser model: {final_path} ({final_path.stat().st_size / 1e6:.1f} MB)")
+    if args.fp16:
+        convert_fp16(onnx_path)
+
+    if args.validate:
+        validate(model, onnx_path)
+
+    print(f"\nFinal model: {onnx_path}  ({onnx_path.stat().st_size / 1e6:.2f} MB)")
 
 
 if __name__ == "__main__":
