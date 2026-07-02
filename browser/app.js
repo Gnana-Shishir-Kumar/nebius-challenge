@@ -839,6 +839,23 @@ function initSegmentButton() {
   });
 }
 
+function initKeyboardShortcuts() {
+  document.addEventListener("keydown", (e) => {
+    if (e.code !== "Space" && e.key !== " ") return;
+    if (isTypingInField(e.target)) return;
+
+    e.preventDefault();
+    if (els.segmentBtn.disabled || state.inferring) return;
+    els.segmentBtn.click();
+  });
+}
+
+function isTypingInField(target) {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
+}
+
 // --- init() ---
 
 function init() {
@@ -850,6 +867,7 @@ function init() {
   initThresholdSlider();
   initHeatmapToggle();
   initSegmentButton();
+  initKeyboardShortcuts();
   initCompareCloudButton();
   loadModel();
 }

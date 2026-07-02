@@ -3,7 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="EndoSeg — browser-native ovarian-lesion ultrasound segmentation. Fine-tuned on Nebius Serverless, inferred privately in your browser with ONNX Runtime Web." />
   <meta name="proxy-url" content="" />
+  <meta property="og:title" content="EndoSeg — Private Ultrasound Segmentation in Your Browser" />
+  <meta property="og:description" content="Fine-tuned in the cloud on Nebius Serverless. Inferred locally in your browser — your scan never leaves your device." />
+  <meta property="og:image" content="samples/sample1.png" />
+  <meta property="og:type" content="website" />
   <title>EndoSeg</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -62,6 +67,7 @@
             alt="Sample 1 ultrasound"
             width="120"
             height="90"
+            loading="lazy"
           />
           <span class="sample-card__label">Sample 1</span>
           <button
@@ -80,6 +86,7 @@
             alt="Sample 2 ultrasound"
             width="120"
             height="90"
+            loading="lazy"
           />
           <span class="sample-card__label">Sample 2</span>
           <button
@@ -98,6 +105,7 @@
             alt="Sample 3 ultrasound"
             width="120"
             height="90"
+            loading="lazy"
           />
           <span class="sample-card__label">Sample 3</span>
           <button
@@ -156,7 +164,7 @@
           Show probability heatmap (instead of binary mask)
         </label>
 
-        <button id="segment-btn" class="btn btn--primary" type="button" disabled>
+        <button id="segment-btn" class="btn btn--primary" type="button" disabled title="Shortcut: Space">
           Segment
         </button>
 
@@ -203,8 +211,44 @@
     </section>
   </main>
 
+  <section class="how-it-works-wrap" aria-label="How it works">
+    <details class="how-it-works">
+      <summary>How does this work?</summary>
+      <ol class="how-it-works__steps">
+        <li class="how-it-works__step">
+          <span class="how-it-works__icon" aria-hidden="true">🔒</span>
+          <div>
+            <strong>Upload</strong>
+            <p>Your image stays in your browser tab. Nothing is uploaded unless you explicitly choose cloud comparison.</p>
+          </div>
+        </li>
+        <li class="how-it-works__step">
+          <span class="how-it-works__icon" aria-hidden="true">🧠</span>
+          <div>
+            <strong>Segment</strong>
+            <p>A compact U-Net runs entirely in JavaScript via ONNX Runtime Web (WebGPU or WASM fallback).</p>
+          </div>
+        </li>
+        <li class="how-it-works__step">
+          <span class="how-it-works__icon" aria-hidden="true">📊</span>
+          <div>
+            <strong>Review</strong>
+            <p>The teal mask overlay highlights detected ovarian lesions. Adjust opacity and threshold to explore results.</p>
+          </div>
+        </li>
+      </ol>
+      <p class="how-it-works__link">
+        <a href="https://github.com/Gnana-Shishir-Kumar/nebius-challenge/blob/main/blog/draft.md" target="_blank" rel="noopener">Read the full technical blog post →</a>
+      </p>
+    </details>
+  </section>
+
   <footer class="footer">
-    Research only — not a medical device
+    <p class="footer__disclaimer">Research only — not a medical device</p>
+    <p class="footer__meta">
+      <span class="version-badge">v0.1.0</span>
+      <span class="footer__hint">Press <kbd>Space</kbd> to segment</span>
+    </p>
   </footer>
 
   <script type="module" src="app.js"></script>
