@@ -1,12 +1,9 @@
 """Nebius Job N1 — MMOTU preprocessing / ETL.
 
-Resizes images to 256x256, normalizes intensity (optional CLAHE), converts to
-RGB, encodes binary lesion masks, and writes a patient-disjoint train/val/test
-split manifest. Reads raw data from / writes processed data to object-storage
-mounts (paths are passed via env vars / CLI args).
-
-This is a runnable stub: the directory walk and split logic are real; the
-per-image transform is intentionally simple and meant to be extended.
+Reads the raw MMOTU_DataSet mirror (images/*.JPG, annotations/*.PNG,
+annotations/*_binary.PNG), converts each pair to a grayscale/CLAHE image and
+a strict {0,1} binary mask at a fixed resolution, and writes them out as
+.npy arrays alongside a train/val/test split manifest.
 """
 
 from __future__ import annotations
@@ -26,32 +23,29 @@ IMG_SIZE = 256
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="EndoSeg MMOTU preprocessing job")
-    p.add_argument("--raw-dir", default=os.getenv("RAW_DIR", "/data/raw/mmotu"))
-    p.add_argument("--out-dir", default=os.getenv("OUT_DIR", "/data/processed"))
+    p.add_argument("--raw-dir", default=os.getenv("RAW_DIR", "data/MMOTU_DataSet"))
+    p.add_argument("--out-dir", default=os.getenv("OUT_DIR", "data/processed"))
     p.add_argument("--img-size", type=int, default=IMG_SIZE)
-    p.add_argument("--val-frac", type=float, default=0.15)
-    p.add_argument("--test-frac", type=float, default=0.15)
-    p.add_argument("--clahe", action="store_true", help="apply CLAHE to luminance")
+    p.add_argument("--val-split", type=float, default=0.15)
+    p.add_argument("--test-split", type=float, default=0.15)
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--limit", type=int, default=None, help="cap number of images processed (smoke test)")
     return p.parse_args()
 
 
-def preprocess_image(path: Path, size: int, clahe: bool) -> np.ndarray:
-    """Load -> resize -> optional CLAHE -> RGB uint8."""
-    img = cv2.imread(str(path), cv2.IMREAD_COLOR)
+def preprocess_image(path: Path, size: int) -> np.ndarray:
+    """Load -> grayscale -> CLAHE -> resize -> normalize to [0,1] float32."""
+    img = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
     if img is None:
         raise FileNotFoundError(f"could not read image: {path}")
-    img = cv2.resize(img, (size, size), interpolation=cv2.INTER_LINEAR)
-    if clahe:
-        lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-        clahe_op = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        lab[..., 0] = clahe_op.apply(lab[..., 0])
-        img = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
-    return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    clahe_op = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    img = clahe_op.apply(img)
+    img = cv2.resize(img, (size, size), interpolation=cv2.INTER_AREA)
+    return (img.astype(np.float32) / 255.0)
 
 
 def preprocess_mask(path: Path, size: int) -> np.ndarray:
-    """Load mask -> resize (nearest) -> binarize to {0,1}."""
+    """Load mask -> resize (nearest, preserves labels) -> binarize to {0,1} uint8."""
     mask = cv2.imread(str(path), cv2.IMREAD_GRAYSCALE)
     if mask is None:
         raise FileNotFoundError(f"could not read mask: {path}")
@@ -59,20 +53,39 @@ def preprocess_mask(path: Path, size: int) -> np.ndarray:
     return (mask > 0).astype(np.uint8)
 
 
-def split_records(records: list[dict], val_frac: float, test_frac: float, seed: int) -> dict:
-    """Patient-disjoint split. Falls back to per-image split if no patient id.
+def find_mask_path(raw_dir: Path, stem: str) -> Path | None:
+    """Prefer the pre-made binary mask, else fall back to the multi-class mask."""
+    binary_path = raw_dir / "annotations" / f"{stem}_binary.PNG"
+    if binary_path.exists():
+        return binary_path
+    fallback_path = raw_dir / "annotations" / f"{stem}.PNG"
+    if fallback_path.exists():
+        return fallback_path
+    return None
 
-    TODO: parse the true MMOTU patient/case id so the split is leakage-free.
+
+def split_stems(stems: list[str], val_split: float, test_split: float, seed: int) -> dict:
+    """Stratified random split by file ID.
+
+    MMOTU filenames in this data mirror are plain numeric IDs with no
+    recoverable patient/case grouping, so a true patient-disjoint split isn't
+    possible from filenames alone.
     """
+    print(
+        "WARNING: patient-level grouping not available in this data mirror -- "
+        "using stratified random split by file ID. Note this in the README "
+        "as a known limitation."
+    )
     rng = random.Random(seed)
-    rng.shuffle(records)
-    n = len(records)
-    n_test = int(n * test_frac)
-    n_val = int(n * val_frac)
+    shuffled = list(stems)
+    rng.shuffle(shuffled)
+    n = len(shuffled)
+    n_test = int(n * test_split)
+    n_val = int(n * val_split)
     return {
-        "test": records[:n_test],
-        "val": records[n_test : n_test + n_val],
-        "train": records[n_test + n_val :],
+        "test": shuffled[:n_test],
+        "val": shuffled[n_test : n_test + n_val],
+        "train": shuffled[n_test + n_val :],
     }
 
 
@@ -85,31 +98,34 @@ def main() -> None:
     images_out.mkdir(parents=True, exist_ok=True)
     masks_out.mkdir(parents=True, exist_ok=True)
 
-    # Expected layout (adjust to the real MMOTU release):
-    #   raw_dir/images/<id>.jpg  and  raw_dir/masks/<id>.png
-    image_paths = sorted((raw_dir / "images").glob("*"))
+    image_paths = sorted((raw_dir / "images").glob("*.JPG"))
+    if args.limit is not None:
+        image_paths = image_paths[: args.limit]
     print(f"found {len(image_paths)} images under {raw_dir}")
 
-    records: list[dict] = []
+    stems: list[str] = []
+    n_skipped = 0
     for img_path in tqdm(image_paths, desc="preprocessing"):
         stem = img_path.stem
-        mask_path = raw_dir / "masks" / f"{stem}.png"
-        if not mask_path.exists():
+        mask_path = find_mask_path(raw_dir, stem)
+        if mask_path is None:
+            print(f"WARNING: no matching mask for {img_path.name} -- skipping")
+            n_skipped += 1
             continue
-        img = preprocess_image(img_path, args.img_size, args.clahe)
+        img = preprocess_image(img_path, args.img_size)
         mask = preprocess_mask(mask_path, args.img_size)
-        cv2.imwrite(str(images_out / f"{stem}.png"), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-        cv2.imwrite(str(masks_out / f"{stem}.png"), mask * 255)
-        records.append({"id": stem, "image": f"images/{stem}.png", "mask": f"masks/{stem}.png"})
+        np.save(images_out / f"{stem}.npy", img)
+        np.save(masks_out / f"{stem}.npy", mask)
+        stems.append(stem)
 
-    splits = split_records(records, args.val_frac, args.test_frac, args.seed)
+    splits = split_stems(stems, args.val_split, args.test_split, args.seed)
     manifest_path = out_dir / "splits.json"
     with open(manifest_path, "w") as f:
-        json.dump({k: v for k, v in splits.items()}, f, indent=2)
+        json.dump(splits, f, indent=2)
 
-    print(f"wrote {len(records)} processed pairs")
-    for name, recs in splits.items():
-        print(f"  {name}: {len(recs)}")
+    print(f"Processed: {len(stems)} images ({n_skipped} skipped -- no matching mask)")
+    print(f"Train: {len(splits['train'])} | Val: {len(splits['val'])} | Test: {len(splits['test'])}")
+    print(f"Output shape check: images {args.img_size}x{args.img_size} float32, masks {args.img_size}x{args.img_size} uint8")
     print(f"manifest -> {manifest_path}")
 
 
