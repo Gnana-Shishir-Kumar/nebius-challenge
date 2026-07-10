@@ -264,16 +264,36 @@ path is explicitly opt-in and clearly labelled.
 
 ## Results
 
-Numbers are reported on the patient-disjoint test split (no data leakage between
-train and test cases). Run the full pipeline to populate this table.
+Trained on real MMOTU data (1469 images, stratified random split — see Known
+limitations), 50 epochs, GPU (~25 min on an RTX 3050 Ti laptop GPU).
 
 | Model | Split | Dice | IoU | Latency |
 |-------|-------|------|-----|---------|
-| U-Net (ONNX, browser, int8) | test | – | – | – ms |
-| U-Net (ONNX, browser, fp32) | test | – | – | – ms |
+| U-Net (ONNX, browser, fp32) | val | 0.7643 (epoch 33) | 0.6703 | – ms |
+| U-Net (ONNX, browser, fp32) | test | 0.7545 | 0.6553 | – ms |
 | Foundation model (Endpoint) | test | – | – | – ms |
 
 Parity delta (browser fp32 vs Endpoint): MAE reported by `export_onnx.py --validate`.
+
+### Known limitations
+
+- **Small-lesion under-segmentation.** A visual sanity check on 8 random test-split
+  images (`jobs/finetune/visualize_predictions.py` → `data/prediction_grid.png`) found
+  per-sample Dice ranging from **0.02 to 0.97**. The model correctly localizes
+  medium/large lesions (6 of 8 samples, Dice 0.63–0.97), but on the 2 worst cases it
+  confidently predicts a large, well-formed blob in roughly the right neighborhood
+  when the true lesion is small or thin — i.e. it isn't collapsing to all-background,
+  but it appears to fall back to a learned "typical lesion" prior when the real lesion
+  doesn't match that shape. Hypothesis: small/thin lesions are underrepresented in the
+  1029-image training split, so the model hasn't learned to trust small foreground
+  regions. Not yet mitigated — a candidate fix is loss reweighting or oversampling
+  small-lesion cases.
+- **Split is not truly patient-disjoint.** MMOTU filenames in this data mirror are
+  plain numeric IDs with no recoverable patient/case grouping, so
+  `jobs/preprocess/preprocess.py` falls back to a stratified random split by file ID
+  (with an explicit warning printed at preprocessing time). There is a small risk of
+  same-patient images (e.g. adjacent frames of the same scan) landing in both train
+  and val/test, which could inflate the reported Dice slightly.
 
 ---
 
