@@ -1,6 +1,6 @@
 # Nebius Serverless Job N1 — MMOTU preprocessing / ETL (CPU only)
 name: endoseg-preprocess
-container_image: cr.nebius.cloud/TODO_PROJECT_ID/endoseg-preprocess:latest  # TODO: set project ID and push image
+container_image: cr.nebius.cloud/TODO_PROJECT_ID/endoseg-preprocess:latest  # REQUIRES: user's Nebius project ID -- fill before job submission
 
 command:
   - python
@@ -8,7 +8,8 @@ command:
   - --raw-dir=/data/raw/mmotu
   - --out-dir=/output/processed
   - --img-size=256
-  - --clahe
+  # note: --clahe was removed -- the current preprocess.py applies CLAHE
+  # unconditionally and no longer accepts this flag (would error otherwise)
 
 resources:
   gpu_count: 0
@@ -20,9 +21,9 @@ environment:
   PYTHONUNBUFFERED: "1"
 
 object_storage_mounts:
-  - bucket: TODO_endoseg-data          # TODO: set bucket name
+  - bucket: TODO_endoseg-data          # REQUIRES: user's Nebius bucket name -- fill before job submission
     mount_path: /data
     read_only: true
-  - bucket: TODO_endoseg-processed     # TODO: set bucket name
+  - bucket: TODO_endoseg-processed     # REQUIRES: user's Nebius bucket name -- fill before job submission
     mount_path: /output
     read_only: false
