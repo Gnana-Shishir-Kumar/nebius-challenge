@@ -68,15 +68,25 @@ Keyboard shortcut: press **Space** to segment after loading an image.
 
 ## Results
 
-Metrics below will be filled after the full training run on Nebius GPUs. We report honestly on a patient-disjoint test split.
+Trained on real MMOTU data (1469 images), 50 epochs, GPU (~25 min on an RTX 3050 Ti
+laptop GPU). We report honestly, including where it falls short.
 
-| Model | Backend | Dice | IoU | Latency |
+| Model | Split | Dice | IoU | Latency |
 |---|---|---|---|---|
-| U-Net (quantized) | Browser / WebGPU | _TODO_ | _TODO_ | _TODO_ |
-| U-Net (quantized) | Browser / WASM | _TODO_ | _TODO_ | _TODO_ |
+| U-Net (ONNX, fp32) | val | 0.7643 (epoch 33) | 0.6703 | _TODO_ |
+| U-Net (ONNX, fp32) | test | 0.7545 | 0.6553 | _TODO_ |
 | Foundation fine-tune | Nebius Endpoint (L40S) | _TODO_ | _TODO_ | _TODO_ |
 
 <!-- TODO: Local vs cloud Dice delta, agreement %, browser latency on mid-range laptop. -->
+
+**Honest limitation:** a visual sanity check on 8 random test-split images
+(`jobs/finetune/visualize_predictions.py`) found per-sample Dice ranging from
+**0.02 to 0.97** — the model is clearly not degenerate (it correctly localizes
+medium/large lesions on 6 of 8 samples), but on small or thin lesions it tends to
+confidently predict a larger, "typical"-shaped blob that doesn't match the true
+lesion boundary. We think this comes from small lesions being underrepresented in
+the training split, and we're calling it out rather than only reporting the
+aggregate Dice, which would hide it.
 
 ## Try It Yourself
 

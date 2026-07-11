@@ -1,6 +1,6 @@
 # Nebius Serverless Job N2 — U-Net fine-tuning (GPU)
 name: endoseg-finetune
-container_image: cr.nebius.cloud/TODO_PROJECT_ID/endoseg-finetune:latest  # TODO: set project ID and push image
+container_image: cr.nebius.cloud/TODO_PROJECT_ID/endoseg-finetune:latest  # REQUIRES: user's Nebius project ID -- fill before job submission
 
 command:
   - python
@@ -21,9 +21,9 @@ environment:
   PYTHONUNBUFFERED: "1"
 
 object_storage_mounts:
-  - bucket: TODO_endoseg-processed     # TODO: set bucket name (preprocessed data, read-only)
+  - bucket: TODO_endoseg-processed     # REQUIRES: user's Nebius bucket name -- fill before job submission (preprocessed data, read-only)
     mount_path: /data
     read_only: true
-  - bucket: TODO_endoseg-checkpoints   # TODO: set bucket name (checkpoint output)
+  - bucket: TODO_endoseg-checkpoints   # REQUIRES: user's Nebius bucket name -- fill before job submission (checkpoint output)
     mount_path: /output
     read_only: false
