@@ -145,6 +145,10 @@ bash data/download_mmotu.sh
 # 4. Smoke-test the model (no data required)
 python -c "from models import UNet2D; m = UNet2D.for_browser(); print(m.model_size_mb(), 'MB')"
 pytest tests/                      # ONNX parity test (needs unet.onnx in browser/model/)
+
+# 5. (Optional) After training: evaluate on the test split and visually inspect predictions
+python jobs/finetune/evaluate_test.py    # Prints test_dice and test_iou
+python jobs/finetune/visualize_predictions.py  # Saves data/prediction_grid.png
 ```
 
 **Hardware:** CPU is sufficient for preprocessing, export, and the browser demo.
@@ -157,8 +161,8 @@ WebGPU-capable browser; it falls back to WASM automatically.
 
 ### N1 — Preprocessing Job (CPU)
 
-Resizes images to 256×256, applies optional CLAHE, binarizes masks
-(lesion vs background), and writes a patient-disjoint 70/15/15 train/val/test split
+Resizes images to 256×256, applies CLAHE contrast normalization, binarizes masks
+(lesion vs background), and writes a stratified random 70/15/15 train/val/test split
 manifest (`splits.json`) to object storage.
 
 ```bash
@@ -168,8 +172,7 @@ nebius serverless job create -f nebius/job_preprocess.yaml
 # Or run locally:
 python jobs/preprocess/preprocess.py \
     --raw-dir data/MMOTU_DataSet \
-    --out-dir data/processed \
-    --clahe
+    --out-dir data/processed
 ```
 
 ### N2 — Fine-tuning Job (GPU)
