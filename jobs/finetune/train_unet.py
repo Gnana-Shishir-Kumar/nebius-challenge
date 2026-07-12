@@ -24,6 +24,7 @@ The smoke test runs 2 batches/epoch for 2 epochs; if no dataset is found at
 from __future__ import annotations
 
 import argparse
+import json
 import random
 import sys
 from pathlib import Path
@@ -132,6 +133,19 @@ def discover_pairs(data_dir: Path) -> list[tuple[Path, Path, str]]:
     return pairs
 
 
+def discover_preprocessed_splits(data_dir: Path) -> dict[str, list[str]] | None:
+    """Load a splits.json manifest written by jobs/preprocess/preprocess.py.
+
+    Returns ``None`` if ``data_dir`` doesn't look like a preprocessed output
+    directory (no splits.json), so callers can fall back to raw-pair discovery.
+    """
+    splits_path = data_dir / "splits.json"
+    if not splits_path.is_file():
+        return None
+    with open(splits_path) as f:
+        return json.load(f)
+
+
 def split_by_case(
     pairs: list[tuple[Path, Path, str]],
     seed: int,
@@ -226,6 +240,38 @@ class MMOTUDataset(Dataset):
         return image_t, mask_t
 
 
+class PreprocessedMMOTUDataset(Dataset):
+    """Loads MMOTU pairs already preprocessed by jobs/preprocess/preprocess.py.
+
+    Expects ``data_dir/images/{stem}.npy`` (float32 HxW, normalized [0,1]) and
+    ``data_dir/masks/{stem}.npy`` (uint8 HxW, values {0,1}) for each stem.
+    """
+
+    def __init__(self, data_dir: Path, stems: list[str], augment: bool) -> None:
+        self.data_dir = data_dir
+        self.stems = stems
+        self.augment = augment
+        self.aug = build_augmentations() if augment else None
+
+    def __len__(self) -> int:
+        return len(self.stems)
+
+    def __getitem__(self, idx: int):
+        stem = self.stems[idx]
+        image = np.load(self.data_dir / "images" / f"{stem}.npy")  # float32 HxW [0,1]
+        mask = np.load(self.data_dir / "masks" / f"{stem}.npy")    # uint8 HxW {0,1}
+
+        if self.aug is not None:
+            image_u8 = np.clip(image * 255.0, 0, 255).astype(np.uint8)
+            out = self.aug(image=image_u8, mask=mask)
+            image = out["image"].astype(np.float32) / 255.0
+            mask = out["mask"]
+
+        image_t = torch.from_numpy(image.astype(np.float32)).unsqueeze(0)  # (1,H,W)
+        mask_t = torch.from_numpy(mask.astype(np.float32)).unsqueeze(0)    # (1,H,W)
+        return image_t, mask_t
+
+
 class SyntheticDataset(Dataset):
     """Tiny random dataset used by --smoke-test when no real data is present."""
 
@@ -290,9 +336,16 @@ def main() -> None:
 
     # ---- data ----
     data_dir = Path(args.data_dir)
-    pairs = discover_pairs(data_dir)
+    preprocessed_splits = discover_preprocessed_splits(data_dir)
+    pairs = [] if preprocessed_splits is not None else discover_pairs(data_dir)
 
-    if pairs:
+    if preprocessed_splits is not None:
+        print(f"found preprocessed splits.json under {data_dir}")
+        for name in ("train", "val", "test"):
+            print(f"  {name}: {len(preprocessed_splits.get(name, []))}")
+        train_ds = PreprocessedMMOTUDataset(data_dir, preprocessed_splits["train"], augment=True)
+        val_ds = PreprocessedMMOTUDataset(data_dir, preprocessed_splits["val"], augment=False)
+    elif pairs:
         print(f"found {len(pairs)} image/mask pairs under {data_dir}")
         splits = split_by_case(pairs, seed=args.seed)
         for name in ("train", "val", "test"):

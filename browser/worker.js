@@ -1,6 +1,16 @@
 // EndoSeg inference Web Worker — ONNX Runtime Web (WebGPU → WASM fallback).
 
-importScripts("https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js");
+importScripts("https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/ort.min.js");
+
+// onnxruntime-web resolves its WASM/JSEP support files relative to the page's
+// own origin unless told otherwise, so it must be pointed back at the same
+// CDN version it was imported from. Multi-threaded WASM also needs
+// Cross-Origin-Opener-Policy/Cross-Origin-Embedder-Policy response headers
+// that a plain static file server (e.g. `python -m http.server`) doesn't
+// send, so threading is disabled here.
+ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/";
+ort.env.wasm.numThreads = 1;
+ort.env.wasm.simd = true;
 
 const CACHE_DB = "endoseg-cache";
 const CACHE_STORE = "models";

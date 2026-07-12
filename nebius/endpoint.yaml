@@ -1,6 +1,6 @@
 # Nebius Serverless Endpoint N4 — hosted inference (HTTP JSON)
 name: endoseg-endpoint
-container_image: cr.nebius.cloud/TODO_PROJECT_ID/endoseg-endpoint:latest  # TODO: set project ID and push image
+container_image: cr.nebius.cloud/TODO_PROJECT_ID/endoseg-endpoint:latest  # REQUIRES: user's Nebius project ID -- fill before job submission
 
 command:
   - uvicorn
@@ -21,7 +21,7 @@ environment:
   PORT: "8000"
 
 object_storage_mounts:
-  - bucket: TODO_endoseg-models        # TODO: set bucket name (ONNX model, read-only)
+  - bucket: TODO_endoseg-models        # REQUIRES: user's Nebius bucket name -- fill before job submission (ONNX model, read-only)
     mount_path: /data
     read_only: true
 

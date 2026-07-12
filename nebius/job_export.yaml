@@ -1,6 +1,6 @@
 # Nebius Serverless Job N3 — ONNX export + parity check (CPU only)
 name: endoseg-export
-container_image: cr.nebius.cloud/TODO_PROJECT_ID/endoseg-export:latest  # TODO: set project ID and push image
+container_image: cr.nebius.cloud/TODO_PROJECT_ID/endoseg-export:latest  # REQUIRES: user's Nebius project ID -- fill before job submission
 
 command:
   - python
@@ -20,9 +20,9 @@ environment:
   PYTHONUNBUFFERED: "1"
 
 object_storage_mounts:
-  - bucket: TODO_endoseg-checkpoints   # TODO: set bucket name (trained weights, read-only)
+  - bucket: TODO_endoseg-checkpoints   # REQUIRES: user's Nebius bucket name -- fill before job submission (trained weights, read-only)
     mount_path: /data
     read_only: true
-  - bucket: TODO_endoseg-models        # TODO: set bucket name (ONNX output)
+  - bucket: TODO_endoseg-models        # REQUIRES: user's Nebius bucket name -- fill before job submission (ONNX output)
     mount_path: /output
     read_only: false
