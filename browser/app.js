@@ -1,10 +1,22 @@
 // EndoSeg browser app — UI + ONNX inference worker.
 
+import { analyzeMaskShape } from "./shape-analysis.js";
+import {
+  AGE_BANDS,
+  PREVALENCE,
+  ageAdjustedFlag,
+  ageBandForAge,
+  diameterCmFromArea,
+  estimateAgeRange,
+  parseOptionalAge,
+  shapeToLesionType,
+} from "./age-clinical.js";
+
 const MODEL_URL = "./model/unet.onnx";
 const INFER_SIZE = 256;
 const CANVAS_SIZE = 512;
 const PRIVACY_DISMISSED_KEY = "endoseg-privacy-dismissed";
-const MASK_COLOR = { r: 13, g: 122, b: 107 }; // #0d7a6b
+const MASK_COLOR = { r: 45, g: 158, b: 130 }; // #2d9e82
 const HEATMAP_OVERLAY_ALPHA = 0.6;
 const LOADING_BAR_MS = 3000;
 
@@ -21,6 +33,7 @@ const state = {
   localLatencyMs: null,
   comparingCloud: false,
   modelFromCache: false,
+  lastShapeAnalysis: null,
 };
 
 function getProxyUrl() {
@@ -62,6 +75,23 @@ const els = {
   cloudCompareLatency: document.getElementById("cloud-compare-latency"),
   agreementPct: document.getElementById("agreement-pct"),
   diceScore: document.getElementById("dice-score"),
+  shapeInsight: document.getElementById("shape-insight"),
+  shapeName: document.getElementById("shape-name"),
+  riskBadge: document.getElementById("risk-badge"),
+  clinicalHint: document.getElementById("clinical-hint"),
+  ageFlag: document.getElementById("age-flag"),
+  metricCircularity: document.getElementById("metric-circularity"),
+  metricSolidity: document.getElementById("metric-solidity"),
+  metricLobes: document.getElementById("metric-lobes"),
+  metricArea: document.getElementById("metric-area"),
+  patientAge: document.getElementById("patient-age"),
+  resultsHeader: document.getElementById("results-header"),
+  resultsMeta: document.getElementById("results-meta"),
+  prevalenceCard: document.getElementById("prevalence-card"),
+  prevalenceTitle: document.getElementById("prevalence-title"),
+  prevalenceChart: document.getElementById("prevalence-chart"),
+  ageEstimate: document.getElementById("age-estimate"),
+  ageEstimateText: document.getElementById("age-estimate-text"),
 };
 
 const ctx = els.outputCanvas.getContext("2d");
@@ -215,6 +245,7 @@ function drawPlaceholderSample(sampleId) {
   state.lastMaskData = null;
   state.localLatencyMs = null;
   hideConfidenceReadout();
+  hideShapeInsight();
   els.cloudCompare.hidden = true;
   drawImageLetterboxed(off);
   updateCompareButtonState();
@@ -265,7 +296,7 @@ function drawMaskLegend() {
   ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
   ctx.fillRect(padding - 4, CANVAS_SIZE - padding - swatch - 14, 78, 24);
 
-  ctx.fillStyle = "#0d7a6b";
+  ctx.fillStyle = "#2d9e82";
   ctx.fillRect(padding, CANVAS_SIZE - padding - swatch - 8, swatch, swatch);
 
   ctx.fillStyle = "#ffffff";
@@ -398,6 +429,179 @@ function hideConfidenceReadout() {
   els.confArea.textContent = "—";
 }
 
+const RISK_BADGE_CLASS = {
+  low: "risk-badge--low",
+  "low-moderate": "risk-badge--low-moderate",
+  moderate: "risk-badge--moderate",
+  higher: "risk-badge--higher",
+};
+
+const RISK_LABEL = {
+  low: "Low risk",
+  "low-moderate": "Low–moderate",
+  moderate: "Moderate",
+  higher: "Higher risk",
+};
+
+function getPatientAge() {
+  return parseOptionalAge(els.patientAge?.value);
+}
+
+function updateResultsHeader() {
+  if (!state.lastMaskData) {
+    els.resultsHeader.hidden = true;
+    return;
+  }
+  const ms =
+    state.localLatencyMs != null ? Math.round(state.localLatencyMs) : "—";
+  const backend = formatBackend(state.backend) || "—";
+  els.resultsMeta.textContent = `Processed in ${ms}ms · ${backend}`;
+  els.resultsHeader.hidden = false;
+}
+
+function updateAgeFlag(_riskFromShape) {
+  const age = getPatientAge();
+  const flag = ageAdjustedFlag(age);
+  if (!flag) {
+    els.ageFlag.hidden = true;
+    els.ageFlag.textContent = "";
+    els.ageFlag.className = "age-flag";
+    return;
+  }
+  const risk = flag.risk || "low";
+  els.ageFlag.textContent = flag.text;
+  els.ageFlag.className = `age-flag age-flag--${risk}`;
+  els.ageFlag.hidden = false;
+}
+
+function renderPrevalenceChart(lesionType, age) {
+  const data = PREVALENCE[lesionType] || PREVALENCE["Complex / Irregular / Indeterminate"];
+  const highlight = ageBandForAge(age);
+  const maxVal = Math.max(...AGE_BANDS.map((b) => data[b] || 0), 1);
+
+  const W = 480;
+  const H = 120;
+  const padL = 28;
+  const padR = 8;
+  const padT = 10;
+  const padB = 28;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+  const n = AGE_BANDS.length;
+  const gap = 10;
+  const barW = (chartW - gap * (n - 1)) / n;
+
+  let bars = "";
+  AGE_BANDS.forEach((band, i) => {
+    const val = data[band] || 0;
+    const h = (val / maxVal) * chartH;
+    const x = padL + i * (barW + gap);
+    const y = padT + chartH - h;
+    const active = highlight === band;
+    const fill = active ? "#2d9e82" : "#3a3a4e";
+    bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(h, 1).toFixed(1)}" rx="4" fill="${fill}"></rect>`;
+    bars += `<text x="${(x + barW / 2).toFixed(1)}" y="${H - 8}" text-anchor="middle" fill="#8888a8" font-size="10" font-family="system-ui,sans-serif">${band}</text>`;
+    bars += `<text x="${(x + barW / 2).toFixed(1)}" y="${(y - 4).toFixed(1)}" text-anchor="middle" fill="${active ? "#2d9e82" : "#8888a8"}" font-size="10" font-weight="600" font-family="system-ui,sans-serif">${val}%</text>`;
+  });
+
+  els.prevalenceTitle.textContent = `Age prevalence — ${lesionType}`;
+  els.prevalenceChart.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${bars}</svg>`;
+  els.prevalenceCard.hidden = false;
+}
+
+function updateAgeEstimate(analysis) {
+  if (!analysis) {
+    els.ageEstimate.hidden = true;
+    return;
+  }
+  const range = estimateAgeRange(analysis.shape_name, analysis.area_px);
+  const d = diameterCmFromArea(analysis.area_px || 0);
+  const sizeBit = d > 0 ? ` (~${d.toFixed(1)} cm)` : "";
+  els.ageEstimateText.textContent =
+    `Based on lesion morphology and size${sizeBit}, this presentation is most commonly seen in patients aged ${range}.`;
+  els.ageEstimate.hidden = false;
+}
+
+function hideClinicalExtras() {
+  els.ageFlag.hidden = true;
+  els.ageFlag.textContent = "";
+  els.prevalenceCard.hidden = true;
+  els.prevalenceChart.innerHTML = "";
+  els.ageEstimate.hidden = true;
+  els.resultsHeader.hidden = true;
+  state.lastShapeAnalysis = null;
+}
+
+function hideShapeInsight() {
+  els.shapeInsight.hidden = true;
+  els.shapeName.textContent = "—";
+  els.clinicalHint.textContent = "—";
+  els.metricCircularity.textContent = "—";
+  els.metricSolidity.textContent = "—";
+  els.metricLobes.textContent = "—";
+  els.metricArea.textContent = "—";
+  els.riskBadge.textContent = "—";
+  els.riskBadge.className = "risk-badge risk-badge--low";
+  hideClinicalExtras();
+}
+
+function updateShapeInsight(analysis) {
+  if (!analysis) {
+    hideShapeInsight();
+    return;
+  }
+
+  state.lastShapeAnalysis = analysis;
+  const risk = analysis.risk_level || "low";
+  els.shapeName.textContent = analysis.shape_name || "Indeterminate";
+  els.clinicalHint.textContent = analysis.clinical_hint || "—";
+  els.metricCircularity.textContent =
+    analysis.circularity != null ? Number(analysis.circularity).toFixed(3) : "—";
+  els.metricSolidity.textContent =
+    analysis.solidity != null ? Number(analysis.solidity).toFixed(3) : "—";
+  els.metricLobes.textContent =
+    analysis.lobe_count != null ? String(analysis.lobe_count) : "—";
+  els.metricArea.textContent =
+    analysis.area_px != null ? `${analysis.area_px} px` : "—";
+
+  els.riskBadge.textContent = RISK_LABEL[risk] || risk;
+  els.riskBadge.className = `risk-badge ${RISK_BADGE_CLASS[risk] || RISK_BADGE_CLASS.low}`;
+  els.shapeInsight.hidden = false;
+
+  updateAgeFlag(risk);
+  const lesionType = shapeToLesionType(analysis.shape_name);
+  renderPrevalenceChart(lesionType, getPatientAge());
+  updateAgeEstimate(analysis);
+  updateResultsHeader();
+}
+
+function refreshShapeInsight(maskData, threshold = getThreshold()) {
+  if (!maskData) {
+    hideShapeInsight();
+    return;
+  }
+  try {
+    const analysis = analyzeMaskShape(maskData, INFER_SIZE, INFER_SIZE, threshold);
+    updateShapeInsight(analysis);
+  } catch (err) {
+    console.warn("shape analysis failed:", err);
+    hideShapeInsight();
+  }
+}
+
+function initPatientAgeInput() {
+  const refresh = () => {
+    if (!state.lastShapeAnalysis) return;
+    updateAgeFlag(state.lastShapeAnalysis.risk_level || "low");
+    renderPrevalenceChart(
+      shapeToLesionType(state.lastShapeAnalysis.shape_name),
+      getPatientAge(),
+    );
+  };
+  els.patientAge.addEventListener("input", refresh);
+  els.patientAge.addEventListener("change", refresh);
+}
+
 function redrawMaskOverlay() {
   if (!state.lastMaskData) return;
 
@@ -410,6 +614,7 @@ function redrawMaskOverlay() {
   }
 
   updateConfidenceReadout(state.lastMaskData, threshold);
+  refreshShapeInsight(state.lastMaskData, threshold);
 }
 
 // --- Inference ---
@@ -458,6 +663,7 @@ function onInferResult(maskData, workerLatencyMs) {
   state.localLatencyMs = workerLatencyMs;
 
   redrawMaskOverlay();
+  updateResultsHeader();
   els.latencyInfo.textContent = `${Math.round(workerLatencyMs)} ms`;
   els.backendInfo.textContent = formatBackend(state.backend);
   els.segmentBtn.disabled = !state.hasImage;
@@ -699,6 +905,7 @@ function handleFile(file) {
     state.lastMaskData = null;
     state.localLatencyMs = null;
     hideConfidenceReadout();
+    hideShapeInsight();
     els.cloudCompare.hidden = true;
     drawImageLetterboxed(img);
     URL.revokeObjectURL(url);
@@ -766,6 +973,7 @@ async function loadSample(sampleId, src) {
     state.lastMaskData = null;
     state.localLatencyMs = null;
     hideConfidenceReadout();
+    hideShapeInsight();
     els.cloudCompare.hidden = true;
     drawImageLetterboxed(img);
     state.hasImage = true;
@@ -869,6 +1077,7 @@ function init() {
   initSegmentButton();
   initKeyboardShortcuts();
   initCompareCloudButton();
+  initPatientAgeInput();
   loadModel();
 }
 
