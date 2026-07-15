@@ -1,11 +1,14 @@
 # ---- Data & models (never commit raw/private data or large weights) ----
 data/raw/
+data/raw_unpack/
 data/MMOTU_DataSet/
 data/processed/
 checkpoints/
 *.pt
 *.pth
 *.onnx
+*.tar.gz
+mmotu_*.tar.gz
 browser/models/
 browser/samples/
 
@@ -15,6 +18,10 @@ browser/samples/
 *token*
 secrets/
 secrets.yaml
+iam v2 access-key --help
+
+# ---- Scratch ----
+test.txt
 
 # ---- Python ----
 __pycache__/

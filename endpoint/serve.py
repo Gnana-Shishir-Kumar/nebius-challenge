@@ -6,16 +6,19 @@ import base64
 import io
 import os
 import time
+from typing import Any
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from PIL import Image
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 try:
     import onnxruntime as ort
 except ImportError:
     ort = None
+
+from analysis import analyze_from_pil
 
 MODEL_PATH = os.getenv("MODEL_PATH", "/model/unet.onnx")
 IMG_SIZE = int(os.getenv("IMG_SIZE", "256"))
@@ -33,6 +36,12 @@ class PredictResponse(BaseModel):
     mask_b64: str       # base64-encoded PNG mask (256x256 uint8, values 0-255)
     latency_ms: float
     model_version: str
+    # New optional fields — existing clients ignore them safely.
+    shape_analysis: dict[str, Any] | None = None
+    overlay_b64: str | None = Field(
+        default=None,
+        description="Contour overlay PNG (base64), color-coded by risk level",
+    )
 
 
 def get_session() -> "ort.InferenceSession":
@@ -88,10 +97,24 @@ def predict(req: PredictRequest) -> PredictResponse:
     Image.fromarray(mask).save(buf, format="PNG")
     mask_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
 
+    # Post-segmentation morphology (additive — never breaks core fields).
+    shape_analysis = None
+    overlay_b64 = None
+    try:
+        resized = image.convert("RGB").resize((IMG_SIZE, IMG_SIZE), Image.BILINEAR)
+        result = analyze_from_pil(mask, resized)
+        shape_analysis = result.get("shape_analysis")
+        overlay_b64 = result.get("overlay_b64")
+    except Exception as exc:
+        # Analysis must not fail the prediction.
+        print(f"shape analysis skipped: {exc}")
+
     return PredictResponse(
         mask_b64=mask_b64,
         latency_ms=round(latency_ms, 2),
         model_version=MODEL_VERSION,
+        shape_analysis=shape_analysis,
+        overlay_b64=overlay_b64,
     )
 
 
