@@ -36,8 +36,12 @@ from torch.utils.data import DataLoader, Dataset
 
 import albumentations as A
 
-# Allow `python jobs/finetune/train_unet.py` from repo root or container.
-sys.path.append(str(Path(__file__).resolve().parents[2]))
+# Allow `python jobs/finetune/train_unet.py` from repo root or container (/app).
+_here = Path(__file__).resolve().parent
+for _candidate in (_here, *_here.parents):
+    if (_candidate / "models" / "unet.py").is_file():
+        sys.path.insert(0, str(_candidate))
+        break
 from models.unet import build_model  # noqa: E402
 from models.losses import build_loss  # noqa: E402
 from models.metrics import MetricTracker, dice_score, iou_score  # noqa: E402

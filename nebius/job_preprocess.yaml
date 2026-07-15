@@ -1,6 +1,6 @@
 # Nebius Serverless Job N1 — MMOTU preprocessing / ETL (CPU only)
 name: endoseg-preprocess
-container_image: cr.nebius.cloud/TODO_PROJECT_ID/endoseg-preprocess:latest  # REQUIRES: user's Nebius project ID -- fill before job submission
+container_image: cr.eu-north1.nebius.cloud/e00jnhyx0bf601aj7q/endoseg-preprocess:latest  # REQUIRES: user's Nebius project ID -- fill before job submission
 
 command:
   - python
@@ -21,9 +21,9 @@ environment:
   PYTHONUNBUFFERED: "1"
 
 object_storage_mounts:
-  - bucket: TODO_endoseg-data          # REQUIRES: user's Nebius bucket name -- fill before job submission
+  - bucket: endoseg-data          # REQUIRES: user's Nebius bucket name -- fill before job submission
     mount_path: /data
     read_only: true
-  - bucket: TODO_endoseg-processed     # REQUIRES: user's Nebius bucket name -- fill before job submission
+  - bucket: endoseg-processed     # REQUIRES: user's Nebius bucket name -- fill before job submission
     mount_path: /output
     read_only: false

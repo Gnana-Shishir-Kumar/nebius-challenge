@@ -9,8 +9,12 @@ from pathlib import Path
 import numpy as np
 import torch
 
-# Allow running from jobs/export/ directly during local dev
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+# Allow running from jobs/export/ or container (/app).
+_here = Path(__file__).resolve().parent
+for _candidate in (_here, *_here.parents):
+    if (_candidate / "models").is_dir():
+        sys.path.insert(0, str(_candidate))
+        break
 from models import UNet2D  # noqa: E402
 
 
