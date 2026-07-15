@@ -21,6 +21,13 @@
   --result-gap: 8px;
 }
 
+html {
+  /* Raises the base rem size site-wide so every rem-based text/spacing
+     value scales up proportionally — addresses "text is too small to
+     read without focusing" without hand-tuning every individual rule. */
+  font-size: 118.75%;
+}
+
 *,
 *::before,
 *::after {
@@ -119,10 +126,11 @@ body {
 .main-grid {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 2fr 3fr;
+  align-items: start;
   gap: 1.5rem;
   padding: 0 1.5rem 1.5rem;
-  max-width: 1100px;
+  max-width: 1600px;
   width: 100%;
   margin: 0 auto;
   min-width: 0;
@@ -134,6 +142,12 @@ body {
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-sm);
   padding: 1.25rem;
+}
+
+.panel--upload {
+  position: sticky;
+  top: 1.5rem;
+  align-self: start;
 }
 
 /* --- Drop zone --- */
@@ -245,7 +259,7 @@ body {
 
 .results-header {
   width: 100%;
-  max-width: 512px;
+  max-width: 100%;
   text-align: left;
 }
 
@@ -267,13 +281,13 @@ body {
 
 .canvas-wrap {
   width: 100%;
-  max-width: 512px;
+  max-width: 100%;
 }
 
 #output-canvas {
   display: block;
   width: 100%;
-  max-width: 512px;
+  max-width: 100%;
   height: auto;
   aspect-ratio: 1 / 1;
   border-radius: var(--radius);
@@ -284,7 +298,7 @@ body {
 
 .controls {
   width: 100%;
-  max-width: 512px;
+  max-width: 100%;
   margin-top: 0.5rem;
 }
 
@@ -297,7 +311,7 @@ body {
 }
 
 .age-input-wrap--controls {
-  max-width: 512px;
+  max-width: 100%;
 }
 
 .age-input-label {
@@ -416,7 +430,7 @@ body {
 
 .heatmap-info {
   width: 100%;
-  max-width: 512px;
+  max-width: 100%;
   margin-top: 0;
   padding: 0;
   border-radius: var(--radius);
@@ -467,7 +481,7 @@ body {
 
 .result-card {
   width: 100%;
-  max-width: 512px;
+  max-width: 100%;
   margin-top: 0;
   padding: 0.9rem 1rem;
   border-radius: 12px;
@@ -477,7 +491,7 @@ body {
 
 .shape-insight {
   width: 100%;
-  max-width: 512px;
+  max-width: 100%;
   margin-top: 0;
   padding: 0.9rem 1rem;
   border-radius: 12px;
@@ -847,7 +861,7 @@ body {
 
 .cloud-compare {
   width: 100%;
-  max-width: 512px;
+  max-width: 100%;
   margin-top: 1.25rem;
   padding: 1rem;
   border-radius: var(--radius);
@@ -923,20 +937,12 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* --- How it works --- */
-
-.how-it-works-wrap {
-  width: 100%;
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 0 1.5rem 1.5rem;
-  min-width: 0;
-}
+/* --- How it works (nested inside the upload panel) --- */
 
 .how-it-works {
-  background: var(--color-surface);
+  margin-top: 1.25rem;
+  background: var(--color-bg);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
   padding: 0.85rem 1.1rem;
   border: 1px solid var(--color-border);
   color: var(--color-text);
@@ -1057,8 +1063,9 @@ body {
     gap: 1rem;
   }
 
-  .how-it-works-wrap {
-    padding: 0 1rem 1rem;
+  .panel--upload {
+    position: static;
+    top: auto;
   }
 
   .header {
