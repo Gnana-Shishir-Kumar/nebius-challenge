@@ -119,6 +119,35 @@
         </article>
       </div>
 
+      <details class="how-it-works">
+        <summary>How does this work?</summary>
+        <ol class="how-it-works__steps">
+          <li class="how-it-works__step">
+            <span class="how-it-works__icon" aria-hidden="true">🔒</span>
+            <div>
+              <strong>Upload</strong>
+              <p>Your image stays in your browser tab. Nothing is uploaded unless you explicitly choose cloud comparison.</p>
+            </div>
+          </li>
+          <li class="how-it-works__step">
+            <span class="how-it-works__icon" aria-hidden="true">🧠</span>
+            <div>
+              <strong>Segment</strong>
+              <p>A compact U-Net runs entirely in JavaScript via ONNX Runtime Web (WebGPU or WASM fallback).</p>
+            </div>
+          </li>
+          <li class="how-it-works__step">
+            <span class="how-it-works__icon" aria-hidden="true">📊</span>
+            <div>
+              <strong>Review</strong>
+              <p>The teal mask overlay highlights detected ovarian lesions. Adjust opacity and threshold to explore results.</p>
+            </div>
+          </li>
+        </ol>
+        <p class="how-it-works__link">
+          <a href="https://github.com/Gnana-Shishir-Kumar/nebius-challenge/blob/main/blog/draft.md" target="_blank" rel="noopener">Read the full technical blog post →</a>
+        </p>
+      </details>
     </section>
 
     <section class="panel panel--results" aria-label="Results">
@@ -130,72 +159,6 @@
       <div class="canvas-wrap">
         <canvas id="output-canvas" width="512" height="512" aria-label="Segmentation output"></canvas>
       </div>
-
-      <div id="confidence-readout" class="heatmap-info conf-pills" hidden aria-live="polite">
-        <div class="conf-pill">
-          <span class="conf-pill__label">Mean confidence</span>
-          <span id="conf-mean" class="conf-pill__value">—</span>
-        </div>
-        <div class="conf-pill">
-          <span class="conf-pill__label">Max probability</span>
-          <span id="conf-max" class="conf-pill__value">—</span>
-        </div>
-        <div class="conf-pill">
-          <span class="conf-pill__label">Lesion area</span>
-          <span id="conf-area" class="conf-pill__value">—</span>
-        </div>
-      </div>
-
-      <aside id="shape-insight" class="shape-insight result-card" hidden aria-live="polite">
-        <div class="shape-insight__header">
-          <h3 id="shape-name" class="shape-insight__title">—</h3>
-          <span id="risk-badge" class="risk-badge risk-badge--low">—</span>
-        </div>
-        <p id="clinical-hint" class="shape-insight__hint">—</p>
-        <div id="age-flag" class="age-flag" hidden></div>
-        <div class="shape-insight__metrics" role="list">
-          <div class="shape-metric" role="listitem">
-            <span class="shape-metric__label">Circularity</span>
-            <span id="metric-circularity" class="shape-metric__value">—</span>
-          </div>
-          <div class="shape-metric" role="listitem">
-            <span class="shape-metric__label">Solidity</span>
-            <span id="metric-solidity" class="shape-metric__value">—</span>
-          </div>
-          <div class="shape-metric" role="listitem">
-            <span class="shape-metric__label">Lobe count</span>
-            <span id="metric-lobes" class="shape-metric__value">—</span>
-          </div>
-          <div class="shape-metric" role="listitem">
-            <span class="shape-metric__label">Area</span>
-            <span id="metric-area" class="shape-metric__value">—</span>
-          </div>
-        </div>
-        <p class="shape-insight__disclaimer">
-          For research purposes only. Not a clinical diagnostic tool.
-        </p>
-      </aside>
-
-      <section id="prevalence-card" class="prevalence-card result-card" hidden aria-label="Age prevalence">
-        <h3 id="prevalence-title" class="prevalence-card__title">Age prevalence</h3>
-        <div id="prevalence-chart" class="prevalence-chart" role="img" aria-label="Age prevalence bar chart"></div>
-        <p class="prevalence-card__footnote">
-          Based on published epidemiological data. Individual cases may vary.
-        </p>
-      </section>
-
-      <section id="age-estimate" class="age-estimate result-card" hidden aria-label="Estimated patient profile">
-        <p class="age-estimate__line">
-          <span class="age-estimate__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="8" r="4" />
-              <path d="M4 20c0-4 3.5-7 8-7s8 3 8 7" />
-            </svg>
-          </span>
-          <span id="age-estimate-text" class="age-estimate__text">—</span>
-        </p>
-        <p class="age-estimate__disclaimer">Age estimate is heuristic only.</p>
-      </section>
 
       <div class="controls">
         <label class="slider-label" for="opacity-slider">
@@ -272,6 +235,72 @@
         </button>
       </div>
 
+      <div id="confidence-readout" class="heatmap-info conf-pills" hidden aria-live="polite">
+        <div class="conf-pill">
+          <span class="conf-pill__label">Mean confidence</span>
+          <span id="conf-mean" class="conf-pill__value">—</span>
+        </div>
+        <div class="conf-pill">
+          <span class="conf-pill__label">Max probability</span>
+          <span id="conf-max" class="conf-pill__value">—</span>
+        </div>
+        <div class="conf-pill">
+          <span class="conf-pill__label">Lesion area</span>
+          <span id="conf-area" class="conf-pill__value">—</span>
+        </div>
+      </div>
+
+      <aside id="shape-insight" class="shape-insight result-card" hidden aria-live="polite">
+        <div class="shape-insight__header">
+          <h3 id="shape-name" class="shape-insight__title">—</h3>
+          <span id="risk-badge" class="risk-badge risk-badge--low">—</span>
+        </div>
+        <p id="clinical-hint" class="shape-insight__hint">—</p>
+        <div id="age-flag" class="age-flag" hidden></div>
+        <div class="shape-insight__metrics" role="list">
+          <div class="shape-metric" role="listitem">
+            <span class="shape-metric__label">Circularity</span>
+            <span id="metric-circularity" class="shape-metric__value">—</span>
+          </div>
+          <div class="shape-metric" role="listitem">
+            <span class="shape-metric__label">Solidity</span>
+            <span id="metric-solidity" class="shape-metric__value">—</span>
+          </div>
+          <div class="shape-metric" role="listitem">
+            <span class="shape-metric__label">Lobe count</span>
+            <span id="metric-lobes" class="shape-metric__value">—</span>
+          </div>
+          <div class="shape-metric" role="listitem">
+            <span class="shape-metric__label">Area</span>
+            <span id="metric-area" class="shape-metric__value">—</span>
+          </div>
+        </div>
+        <p class="shape-insight__disclaimer">
+          For research purposes only. Not a clinical diagnostic tool.
+        </p>
+      </aside>
+
+      <section id="prevalence-card" class="prevalence-card result-card" hidden aria-label="Age prevalence">
+        <h3 id="prevalence-title" class="prevalence-card__title">Age prevalence</h3>
+        <div id="prevalence-chart" class="prevalence-chart" role="img" aria-label="Age prevalence bar chart"></div>
+        <p class="prevalence-card__footnote">
+          Based on published epidemiological data. Individual cases may vary.
+        </p>
+      </section>
+
+      <section id="age-estimate" class="age-estimate result-card" hidden aria-label="Estimated patient profile">
+        <p class="age-estimate__line">
+          <span class="age-estimate__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 20c0-4 3.5-7 8-7s8 3 8 7" />
+            </svg>
+          </span>
+          <span id="age-estimate-text" class="age-estimate__text">—</span>
+        </p>
+        <p class="age-estimate__disclaimer">Age estimate is heuristic only.</p>
+      </section>
+
       <div id="cloud-compare" class="cloud-compare" hidden>
         <h3 class="cloud-compare__title">Cloud vs local comparison</h3>
         <div class="cloud-compare__grid">
@@ -293,38 +322,6 @@
       </div>
     </section>
   </main>
-
-  <section class="how-it-works-wrap" aria-label="How it works">
-    <details class="how-it-works">
-      <summary>How does this work?</summary>
-      <ol class="how-it-works__steps">
-        <li class="how-it-works__step">
-          <span class="how-it-works__icon" aria-hidden="true">🔒</span>
-          <div>
-            <strong>Upload</strong>
-            <p>Your image stays in your browser tab. Nothing is uploaded unless you explicitly choose cloud comparison.</p>
-          </div>
-        </li>
-        <li class="how-it-works__step">
-          <span class="how-it-works__icon" aria-hidden="true">🧠</span>
-          <div>
-            <strong>Segment</strong>
-            <p>A compact U-Net runs entirely in JavaScript via ONNX Runtime Web (WebGPU or WASM fallback).</p>
-          </div>
-        </li>
-        <li class="how-it-works__step">
-          <span class="how-it-works__icon" aria-hidden="true">📊</span>
-          <div>
-            <strong>Review</strong>
-            <p>The teal mask overlay highlights detected ovarian lesions. Adjust opacity and threshold to explore results.</p>
-          </div>
-        </li>
-      </ol>
-      <p class="how-it-works__link">
-        <a href="https://github.com/Gnana-Shishir-Kumar/nebius-challenge/blob/main/blog/draft.md" target="_blank" rel="noopener">Read the full technical blog post →</a>
-      </p>
-    </details>
-  </section>
 
   <footer class="footer">
     <p class="footer__disclaimer">Research only — not a medical device</p>
