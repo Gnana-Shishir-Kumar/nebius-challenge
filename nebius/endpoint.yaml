@@ -1,27 +1,25 @@
 # Nebius Serverless Endpoint N4 — hosted inference (HTTP JSON)
 name: endoseg-endpoint
-container_image: cr.nebius.cloud/TODO_PROJECT_ID/endoseg-endpoint:latest  # REQUIRES: user's Nebius project ID -- fill before job submission
+container_image: cr.eu-north1.nebius.cloud/e00jnhyx0bf601aj7q/endoseg-endpoint:latest
 
 command:
-  - uvicorn
-  - serve:app
-  - --host=0.0.0.0
-  - --port=8000
+  - python
+  - serve.py
 
 resources:
-  gpu_count: 1          # nvidia-l40s for production; set 0 for CPU-only testing
+  gpu_count: 0          # onnxruntime CPU is enough for the compact U-Net
   memory_gb: 16
 
 environment:
   DATA_DIR: /data
   OUT_DIR: /output
-  MODEL_PATH: /data/unet.onnx
+  MODEL_PATH: /data/model/unet.onnx
   IMG_SIZE: "256"
   MODEL_VERSION: unet-v1
   PORT: "8000"
 
 object_storage_mounts:
-  - bucket: TODO_endoseg-models        # REQUIRES: user's Nebius bucket name -- fill before job submission (ONNX model, read-only)
+  - bucket: endoseg-models
     mount_path: /data
     read_only: true
 
